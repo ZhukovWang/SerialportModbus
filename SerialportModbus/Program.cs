@@ -3,140 +3,127 @@ using System.Collections.Generic;
 using System.IO.Ports;
 using System.Threading;
 
-
 namespace SerialportModbus
 {
-    class Program
+    internal class Program
     {
         private static string sendMessage = "010310000001";
         private static string mode = "ASCII"; //ASCII OR RTU
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
-            SerialPort _serialPort = new SerialPort(); ;
+            SerialPort serialPort = new SerialPort();
 
             if (sendMessage.Length % 2 == 1)
             {
-                Console.WriteLine(System.DateTime.Now.ToString() + "." + System.DateTime.Now.Millisecond.ToString() + "-" + "Input Error!");
+                Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + "Input Error!");
             }
 
             //init
-            _serialPort.PortName = "COM1";
-            _serialPort.BaudRate = 9600;
-            _serialPort.Parity = Parity.Even;
-            _serialPort.DataBits = 7;
-            _serialPort.StopBits = StopBits.One;
-            _serialPort.Handshake = Handshake.None;
-            _serialPort.ReadTimeout = 500;
-            _serialPort.WriteTimeout = 500;
+            serialPort.PortName = "COM1";
+            serialPort.BaudRate = 9600;
+            serialPort.Parity = Parity.Even;
+            serialPort.DataBits = 7;
+            serialPort.StopBits = StopBits.One;
+            serialPort.Handshake = Handshake.None;
+            serialPort.ReadTimeout = 500;
+            serialPort.WriteTimeout = 500;
 
             //open
-            _serialPort.Open();
+            serialPort.Open();
 
             //deal data
             string sendData;
             List<Byte> dataBytes = new List<byte>();
-            byte lrc = 0;
-            UInt16 crc = 0xffff;
-            string lrc_string, crc_string;
 
-            for (int i = 0; i < sendMessage.Length - 1; i = i + 2)
+            for (int i = 0; i < sendMessage.Length - 1; i += 2)
             {
-                dataBytes.Add(Convert.ToByte((sendMessage[i].ToString() + sendMessage[i+1].ToString()),16));
+                dataBytes.Add(Convert.ToByte((sendMessage[i].ToString() + sendMessage[i + 1].ToString()), 16));
             }
 
             if (mode == "ASCII")
             {
-                lrc = CalLrc(ref dataBytes);
-                lrc_string = Convert.ToString(lrc, 16).ToUpper();
-                sendData = ":" + sendMessage + lrc_string + "\r\n";
-                Console.WriteLine(System.DateTime.Now.ToString() + "." + System.DateTime.Now.Millisecond.ToString() + "-" + sendData);
-                _serialPort.Write(sendData);
+                byte lrc = CalLrc(ref dataBytes);
+                string lrcString = Convert.ToString(lrc, 16).ToUpper();
+                sendData = ":" + sendMessage + lrcString + "\r\n";
+                Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + sendData);
+                serialPort.Write(sendData);
 
-                string recvData;
+                string receiveData;
 
                 try
                 {
-                    recvData = _serialPort.ReadLine();
+                    receiveData = serialPort.ReadLine();
                 }
                 catch (InvalidOperationException)
                 {
-                    Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                      System.DateTime.Now.Millisecond.ToString() + "-" + "Open failed\n");
+                    Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + "Open failed\n");
                     return;
                 }
                 catch (TimeoutException)
                 {
-                    Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                      System.DateTime.Now.Millisecond.ToString() + "-" + "Timeout\n");
-                    _serialPort.Close();
+                    Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + "Timeout\n");
+                    serialPort.Close();
                     return;
                 }
-                Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                  System.DateTime.Now.Millisecond.ToString() + "-" + recvData);
+                Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + receiveData);
             }
             else if (mode == "RTU")
             {
-                crc = CalCrc(ref dataBytes);
-                crc_string = Convert.ToString(crc, 16).ToUpper();
-                sendData = sendMessage + crc_string;
-                Console.WriteLine(System.DateTime.Now.ToString() + "." + System.DateTime.Now.Millisecond.ToString() + "-" + sendData);
+                ushort crc = CalCrc(ref dataBytes);
+                string crcString = Convert.ToString(crc, 16).ToUpper();
+                sendData = sendMessage + crcString;
+                Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + sendData);
 
                 byte[] sendDataBytes = new byte[sendData.Length / 2];
-                for (int i = 0; i < sendData.Length; i=i+2)
+                for (int i = 0; i < sendData.Length; i = i + 2)
                 {
-                    sendDataBytes[i / 2] = (byte) Convert.ToByte(sendData.Substring(i, 2), 16);
-
+                    sendDataBytes[i / 2] = Convert.ToByte(sendData.Substring(i, 2), 16);
                 }
-                _serialPort.Write(sendDataBytes,0,sendDataBytes.Length);
+                serialPort.Write(sendDataBytes, 0, sendDataBytes.Length);
                 Thread.Sleep(50);
-                string recvData = null;
-                byte[] recvDataBytes = new byte[200];
-                int readByteCount = 0;
+                string receiveData = null;
+                byte[] receiveDataBytes = new byte[200];
+                int readByteCount;
                 try
                 {
-                    _serialPort.Read(recvDataBytes, 0, 200);
+                    readByteCount = serialPort.Read(receiveDataBytes, 0, 200);
                 }
                 catch (InvalidOperationException)
                 {
-                    Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                      System.DateTime.Now.Millisecond.ToString() + "-" + "Open failed\n");
+                    Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + "Open failed\n");
                     return;
                 }
                 catch (TimeoutException)
                 {
-                    Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                      System.DateTime.Now.Millisecond.ToString() + "-" + "Timeout\n");
-                    _serialPort.Close();
+                    Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + "Timeout\n");
+                    serialPort.Close();
                     return;
                 }
 
-                for (int i = 199; i > -1; i--)
+                //for (int i = 199; i > -1; i--)
+                //{
+                //    if (receiveDataBytes[i] != 0)
+                //    {
+                //        readByteCount = i;
+                //        break;
+                //    }
+                //}
+                for (int i = 0; i <= readByteCount; i++)
                 {
-                    if (recvDataBytes[i] != 0)
+                    if (receiveDataBytes[i] < 0x10)
                     {
-                        readByteCount = i;
-                        break;
-                    }
-                }
-                for (int i = 0; i <= readByteCount ; i++)
-                {
-                    if (recvDataBytes[i] < 0x10)
-                    {
-                        recvData = recvData + "0" + Convert.ToString(recvDataBytes[i], 16).ToString();
+                        receiveData += "0" + Convert.ToString(receiveDataBytes[i], 16);
                     }
                     else
                     {
-                        recvData = recvData + Convert.ToString(recvDataBytes[i], 16).ToString();
+                        receiveData += Convert.ToString(receiveDataBytes[i], 16);
                     }
                 }
-                Console.WriteLine(System.DateTime.Now.ToString() + "." +
-                                  System.DateTime.Now.Millisecond.ToString() + "-" + recvData);
-
+                Console.WriteLine(DateTime.Now.ToString() + "." + DateTime.Now.Millisecond.ToString() + "-" + receiveData);
             }
 
-            _serialPort.Close();
-
+            serialPort.Close();
         }
 
         private static byte CalLrc(ref List<byte> dataBytes)
@@ -145,16 +132,15 @@ namespace SerialportModbus
 
             foreach (var b in dataBytes)
             {
-                lrcRes = (byte) (((byte) (lrcRes + b)) & 0xFF);
+                lrcRes = (byte)(((byte)(lrcRes + b)) & 0xFF);
             }
-            lrcRes = (byte) (((lrcRes ^ 0xff) + 1) & 0xff);
+            lrcRes = (byte)(((lrcRes ^ 0xff) + 1) & 0xff);
             return lrcRes;
         }
 
         private static ushort CalCrc(ref List<byte> dataBytes)
         {
             ushort crcRes = 0xffff;
-            int length = dataBytes.Count;
             foreach (var b in dataBytes)
             {
                 crcRes ^= b;
@@ -162,11 +148,11 @@ namespace SerialportModbus
                 {
                     if ((crcRes & 0x01) != 0)
                     {
-                        crcRes = (ushort) ((crcRes >> 1) ^ 0xa001);
+                        crcRes = (ushort)((crcRes >> 1) ^ 0xa001);
                     }
                     else
                     {
-                        crcRes = (ushort) (crcRes >> 1);
+                        crcRes = (ushort)(crcRes >> 1);
                     }
                 }
             }
@@ -186,5 +172,4 @@ namespace SerialportModbus
             data = BitConverter.ToUInt16(p, 0);
         }
     }
-    
 }
